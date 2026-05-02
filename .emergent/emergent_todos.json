@@ -1,0 +1,46 @@
+[
+  {
+    "content": "Integrate Phase 3.1 image gen into pipeline (already written, need wiring)",
+    "status": "in_progress"
+  },
+  {
+    "content": "Build 50-template registry (layout/motion/typography/3D/decor variants)",
+    "status": "pending"
+  },
+  {
+    "content": "Generator uses template registry so every site is distinct",
+    "status": "pending"
+  },
+  {
+    "content": "Reference picker UI + /api/references endpoint",
+    "status": "pending"
+  },
+  {
+    "content": "Wipe slider Before/After mode",
+    "status": "pending"
+  },
+  {
+    "content": "Hide 'Made with Emergent' pill",
+    "status": "pending"
+  },
+  {
+    "content": "Provider-agnostic LLM for GitHub users (no Emergent required)",
+    "status": "completed"
+  },
+  {
+    "content": "Integrate image_gen + skillui cache wiring into pipeline & server",
+    "status": "in_progress"
+  },
+  {
+    "content": "Live test on 5 Birmingham UK businesses",
+    "status": "pending"
+  },
+  {
+    "content": "GitHub repo setup + push via API with PAT",
+    "status": "pending"
+  },
+  {
+    "content": "Final summary",
+    "status": "pending"
+  }
+]
