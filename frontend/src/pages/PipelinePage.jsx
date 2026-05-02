@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Link as LinkIcon, Sparkles, Cpu, Shield } from "lucide-react";
+import { ArrowUpRight, Link as LinkIcon, Sparkles, Cpu, Shield, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { createJob } from "@/lib/api";
+import { api, createJob } from "@/lib/api";
 import { useJobStream } from "@/lib/useJobStream";
 import { PipelineStepper } from "@/components/PipelineStepper";
 import { LogStream } from "@/components/LogStream";
@@ -16,8 +16,17 @@ export default function PipelinePage() {
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [jobId, setJobId] = useState(null);
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const [referenceOptions, setReferenceOptions] = useState([]);
   const navigate = useNavigate();
   const { job, logs } = useJobStream(jobId);
+
+  useEffect(() => {
+    api
+      .get("/references")
+      .then((r) => setReferenceOptions(r.data?.references || []))
+      .catch(() => {});
+  }, []);
 
   const heroRef = useRef(null);
   const reduce = useReducedMotion();
@@ -114,6 +123,34 @@ export default function PipelinePage() {
               >
                 {submitting ? "Starting…" : "Transform"} <ArrowUpRight size={16} />
               </button>
+            </div>
+            {/* Reference picker */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+                Reference style
+              </label>
+              <div className="relative">
+                <select
+                  value={referenceUrl}
+                  onChange={(e) => setReferenceUrl(e.target.value)}
+                  data-testid="reference-select"
+                  className="appearance-none bg-white/[0.04] border border-white/10 hover:bg-white/[0.06] transition-colors text-white/85 text-[12px] rounded-md py-1.5 pl-3 pr-8 outline-none focus:border-[var(--teal)]/40"
+                >
+                  <option value="">Auto-match niche</option>
+                  {referenceOptions.map((r) => (
+                    <option key={r.url} value={r.url}>
+                      {r.name} — {r.vibe}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={12}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none"
+                />
+              </div>
+              <span className="text-[11px] text-white/35">
+                We extract its design tokens via skillui and apply your content.
+              </span>
             </div>
             <div className="mt-3 flex items-center gap-5 text-[12px] text-white/50">
               <span className="inline-flex items-center gap-1.5"><Cpu size={12} /> Gemini 2.5 Pro vision</span>

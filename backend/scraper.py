@@ -21,14 +21,24 @@ async def scrape_site(url: str, out_dir: Path) -> dict[str, Any]:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
 
         # desktop
-        ctx_d = await browser.new_context(viewport={"width": 1440, "height": 900})
+        ctx_d = await browser.new_context(
+            viewport={"width": 1440, "height": 900},
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+            ),
+        )
         page_d = await ctx_d.new_page()
+        # Generous timeout + tolerant load condition for slow sites
         try:
-            await page_d.goto(url, wait_until="domcontentloaded", timeout=45000)
-        except Exception as e:
-            await browser.close()
-            raise RuntimeError(f"failed to load {url}: {e}")
-        await page_d.wait_for_timeout(1600)
+            await page_d.goto(url, wait_until="domcontentloaded", timeout=90000)
+        except Exception:
+            try:
+                await page_d.goto(url, wait_until="commit", timeout=60000)
+            except Exception as e:
+                await browser.close()
+                raise RuntimeError(f"failed to load {url}: {e}")
+        await page_d.wait_for_timeout(2200)
         html = await page_d.content()
         title = await page_d.title()
         (out_dir / "original.html").write_text(html, encoding="utf-8")

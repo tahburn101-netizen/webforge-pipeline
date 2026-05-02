@@ -266,9 +266,72 @@ class PipelineRunner:
                             f"Niche: {job.niche}. Must be distinctive (anti-slop) and mobile perfect."
                         ),
                     )
-                    job.qa_generated = QAScores(**qa_gen)
+                    # Treat -1 sentinel as "unavailable" → don't override
+                    if qa_gen.get("overall", 0) >= 0:
+                        job.qa_generated = QAScores(**qa_gen)
+                    else:
+                        await self._log(
+                            job,
+                            f"QA scoring unavailable: {qa_gen.get('notes','')[:200]}",
+                            level="warn",
+                            stage="qa",
+                        )
+                        job.qa_generated = QAScores(notes=qa_gen.get("notes", ""))
                 except Exception as e:
                     await self._log(job, f"QA generated failed: {e}", level="warn", stage="qa")
+
+            # Auto-retry loop: if QA scored & failed threshold, regenerate ONCE with feedback
+            overall = job.qa_generated.overall
+            if 0 < overall < 70 and not getattr(job, "_retried", False):
+                feedback = (job.qa_generated.notes or "").strip()
+                await self._log(
+                    job,
+                    f"QA below threshold ({overall}/100). Regenerating with reviewer feedback.",
+                    stage="qa",
+                    level="warn",
+                )
+                # Pick a different template seed for variety on retry
+                tpl2 = pick_template(seed=job.id + "_retry", niche=job.niche)
+                await self._log(
+                    job,
+                    f"Retry template: {tpl2['name']}",
+                    stage="generate",
+                )
+                # Inject feedback into the plan brand voice notes
+                plan2 = dict(plan)
+                plan2.setdefault("design", {})
+                plan2["design"]["style_notes"] = (
+                    (plan2["design"].get("style_notes") or "")
+                    + f" ANTI-SLOP NOTES: {feedback[:300]}"
+                )
+                generate_project(
+                    plan2,
+                    project_dir,
+                    hero_video_path=hero_video,
+                    project_slug=project_slug,
+                    template=tpl2,
+                    images=generated_images,
+                )
+                # Redeploy + re-QA once
+                dep2 = await deploy_project(project_dir, project_slug + "-v2", on_event=_on_event)
+                job.deployment_id = dep2["deployment_id"]
+                job.project_id = dep2["project_id"]
+                job.deploy_url = dep2["url"]
+                shots2 = await screenshot_url(dep2["url"], gen_dir, name="generated")
+                job.screenshots["generated_desktop"] = Path(shots2["desktop"]).name
+                job.screenshots["generated_mobile"] = Path(shots2["mobile"]).name
+                try:
+                    qa_gen2 = await qa_review(
+                        shots2["desktop"],
+                        shots2["mobile"],
+                        context=f"Retry attempt of {job.input_url}.",
+                    )
+                    if qa_gen2.get("overall", 0) >= 0:
+                        job.qa_generated = QAScores(**qa_gen2)
+                except Exception as e:
+                    await self._log(job, f"retry QA failed: {e}", level="warn", stage="qa")
+                job._retried = True
+                await self._save(job)
 
             passed = job.qa_generated.passed(threshold=70)
             self._set_step(

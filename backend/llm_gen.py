@@ -147,11 +147,43 @@ async def qa_review(
         + "Return JSON only."
     )
     imgs = [p for p in [desktop_png, mobile_png] if p and Path(p).exists()]
-    text = await generate_text(QA_SYSTEM, prompt, images=imgs)
+
+    last_error: str = ""
+    text = ""
+    for attempt in range(2):
+        try:
+            text = await generate_text(QA_SYSTEM, prompt, images=imgs)
+            break
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {str(e)[:200]}"
+            if attempt == 0:
+                # brief wait then retry once
+                import asyncio as _a
+                await _a.sleep(2)
+                continue
+            # No more retries; return graceful "unavailable" placeholder
+            return {
+                "anti_slop": -1,
+                "palette": -1,
+                "mobile": -1,
+                "overall": -1,
+                "notes": f"QA unavailable: {last_error}",
+            }
+
     try:
         data = _parse_json_lenient(text)
     except Exception:
-        data = {"anti_slop": 0, "palette": 0, "mobile": 0, "overall": 0, "notes": text[:400]}
+        # Try one targeted JSON repair pass
+        try:
+            data = await _json_repair(text)
+        except Exception:
+            return {
+                "anti_slop": -1,
+                "palette": -1,
+                "mobile": -1,
+                "overall": -1,
+                "notes": (text or "")[:400] or "QA returned unparseable response",
+            }
     for k in ("anti_slop", "palette", "mobile", "overall"):
         try:
             data[k] = int(data.get(k, 0))
@@ -159,3 +191,14 @@ async def qa_review(
             data[k] = 0
     data["notes"] = (data.get("notes") or "").strip()[:800]
     return data
+
+
+async def _json_repair(text: str) -> dict[str, Any]:
+    """Use a tiny LLM call to coerce QA text into valid JSON."""
+    sys = (
+        "Convert the user's free-form QA review into STRICT JSON of the schema: "
+        '{"anti_slop": int, "palette": int, "mobile": int, "overall": int, "notes": string}. '
+        "Use 0-100 ranges. Output ONLY the JSON, nothing else."
+    )
+    out = await generate_text(sys, text or "{}")
+    return _parse_json_lenient(out)
