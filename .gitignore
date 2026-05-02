@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+.next/
+build/
+dist/
+*.egg-info/
+
+# Env files (NEVER commit secrets)
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env
+
+# Pipeline runtime artifacts
+backend/artifacts/
+backend/uploads/
+test_reports/
+.data/
+.cache/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+yarn-error.log
+
+# Testing
+test_result.md
