@@ -30,6 +30,16 @@ async def generate_site_images(
     accent = design.get("accent") or "#FFB86B"
     brand_voice = brand.get("voice") or "confident, modern"
 
+    # HARD CONSTRAINT: no humans, faces, portraits, body parts in any generated image.
+    # This is enforced at the image-gen prompt level so Gemini Nano Banana complies.
+    NO_HUMANS = (
+        " STRICT CONSTRAINTS: Absolutely NO humans, NO people, NO faces, NO portraits, "
+        "NO silhouettes of people, NO hands, NO body parts of any kind, NO crowds. "
+        "Use ONLY abstract, architectural, environmental, product, nature, macro, "
+        "or object photography. If in doubt, prefer abstract textures, geometric "
+        "forms, typography close-ups, or industrial/product still-life."
+    )
+
     tasks: list[tuple[str, str, str]] = []
 
     # Hero image (always)
@@ -37,6 +47,7 @@ async def generate_site_images(
         f"Abstract cinematic hero visual for {niche}. Mood: {brand_voice}. "
         f"Style: {style_notes}. Palette hinting at {primary} and {accent}. "
         "Moody 3D render feel, soft bokeh, no text, premium product aesthetic."
+        + NO_HUMANS
     )
     tasks.append(("hero", hero_prompt, "hero.jpg"))
 
@@ -49,7 +60,8 @@ async def generate_site_images(
             if used >= limit:
                 break
             kind = (s.get("kind") or "").lower()
-            if kind not in ("gallery", "content_split", "team", "case_studies", "blog"):
+            if kind not in ("gallery", "content_split", "case_studies", "blog"):
+                # Note: we intentionally skip "team" — it tends to prompt humans.
                 continue
             heading = s.get("heading") or ""
             sub = s.get("subheading") or ""
@@ -57,6 +69,7 @@ async def generate_site_images(
                 f"Editorial illustration for '{heading}' section (niche: {niche}). "
                 f"Tone: {sub or brand_voice}. Style: {style_notes}. "
                 f"Palette hinting {primary}/{accent}. No text, dark minimal composition."
+                + NO_HUMANS
             )
             slug = f"section_{used + 1}.jpg"
             tasks.append((f"section_{used + 1}", prompt, slug))

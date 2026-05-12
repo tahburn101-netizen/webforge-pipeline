@@ -5,6 +5,7 @@ import { LogStream } from "@/components/LogStream";
 import { BeforeAfterViewer } from "@/components/BeforeAfterViewer";
 import { QACards } from "@/components/QACards";
 import { DeployPanel } from "@/components/DeployPanel";
+import { PlanReviewGate } from "@/components/PlanReviewGate";
 import { ArrowLeft } from "lucide-react";
 
 export default function JobDetailPage() {
@@ -41,11 +42,15 @@ export default function JobDetailPage() {
           <LogStream logs={logs} />
         </div>
         <div className="lg:col-span-7 space-y-5">
+          <PlanReviewGate job={job} />
           <BeforeAfterViewer job={job} />
           <div className="grid md:grid-cols-2 gap-5">
-            <QACards title="Original" scores={job?.qa_original} />
-            <QACards title="Generated" scores={job?.qa_generated} />
+            <QACards title="Original" scores={job?.qa_original} variant="legacy" />
+            <QACards title="Generated · Desktop" scores={job?.qa_generated} variant="25k" />
           </div>
+          {job?.qa_mobile?.overall > 0 && (
+            <QACards title="Generated · Mobile" scores={job?.qa_mobile} variant="25k" />
+          )}
           <DeployPanel job={job} />
         </div>
       </div>

@@ -11,6 +11,7 @@ import { BeforeAfterViewer } from "@/components/BeforeAfterViewer";
 import { QACards } from "@/components/QACards";
 import { VideoUpload } from "@/components/VideoUpload";
 import { DeployPanel } from "@/components/DeployPanel";
+import { PlanReviewGate } from "@/components/PlanReviewGate";
 
 export default function PipelinePage() {
   const [url, setUrl] = useState("");
@@ -206,11 +207,15 @@ export default function PipelinePage() {
               />
             </div>
             <div className="lg:col-span-7 space-y-5">
+              <PlanReviewGate job={job} />
               <BeforeAfterViewer job={job} />
               <div className="grid md:grid-cols-2 gap-5">
-                <QACards title="Original website" scores={job?.qa_original} />
-                <QACards title="Generated website" scores={job?.qa_generated} />
+                <QACards title="Original website" scores={job?.qa_original} variant="legacy" />
+                <QACards title="Generated · Desktop" scores={job?.qa_generated} variant="25k" />
               </div>
+              {job?.qa_mobile?.overall > 0 && (
+                <QACards title="Generated · Mobile" scores={job?.qa_mobile} variant="25k" />
+              )}
               <DeployPanel job={job} />
               {job?.status === "failed" && job?.error && (
                 <div

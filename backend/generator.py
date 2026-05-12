@@ -25,6 +25,17 @@ def _safe_id(s: str) -> str:
     return s
 
 
+def _slug_to_component_name(slug: str) -> str:
+    """Convert 'aurora-hero' -> 'AuroraHero' for use as an import name."""
+    parts = re.split(r"[^A-Za-z0-9]+", slug or "")
+    name = "".join(p[:1].upper() + p[1:] for p in parts if p)
+    if not name:
+        name = "GenComponent"
+    if name[0].isdigit():
+        name = "C" + name
+    return name
+
+
 def _is_light_hex(hex_color: str) -> bool:
     try:
         h = (hex_color or "#000").lstrip("#")
@@ -60,6 +71,7 @@ def generate_project(
     project_slug: str | None = None,
     template: dict | None = None,
     images: dict[str, str] | None = None,
+    picked_components: list[dict] | None = None,
 ) -> Path:
     """Write the entire Next.js project to out_dir."""
     out_dir = Path(out_dir)
@@ -72,6 +84,7 @@ def generate_project(
     pages = plan.get("pages", []) or []
     nav = plan.get("nav", []) or []
     images = images or {}
+    picked_components = picked_components or []
 
     # Template overrides design tokens (so every site looks different)
     tpl = template or {}
@@ -273,6 +286,54 @@ def generate_project(
         _component_decor_3d(hero_kind, primary, accent), encoding="utf-8"
     )
 
+    # Write picked 21st.dev / motionsites-inspired components into
+    # components/generated/ and build a slug->import map.
+    picks_by_section: dict[int, str] = {}
+    if picked_components:
+        gen_components_dir = components_dir / "generated"
+        gen_components_dir.mkdir(exist_ok=True)
+        written_slugs: set[str] = set()
+        try:
+            from component_library import get_component_jsx, collect_deps  # local import to avoid hard dep at module level
+            for p in picked_components:
+                slug = p.get("slug")
+                if not slug or slug in written_slugs:
+                    # still record the mapping for the section
+                    if slug:
+                        picks_by_section[int(p.get("section_idx", -1))] = slug
+                    continue
+                body = get_component_jsx(slug)
+                if not body:
+                    continue
+                comp_name = _slug_to_component_name(slug)
+                file_body = body.replace(
+                    "export default function ",
+                    f"export default function {comp_name}Impl_",
+                    1,
+                )
+                # Fallback: write the JSX as-is if we couldn't rename
+                if f"function {comp_name}Impl_" not in file_body:
+                    file_body = body
+                (gen_components_dir / f"{slug}.jsx").write_text(
+                    body, encoding="utf-8"
+                )
+                written_slugs.add(slug)
+                picks_by_section[int(p.get("section_idx", -1))] = slug
+            # Add any extra deps to package.json if needed
+            extra_deps = collect_deps(picked_components)
+            if extra_deps:
+                pkg_path = out_dir / "package.json"
+                try:
+                    pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+                    deps = pkg.setdefault("dependencies", {})
+                    if "framer-motion" in extra_deps and "framer-motion" not in deps:
+                        deps["framer-motion"] = "11.3.19"
+                    pkg_path.write_text(json.dumps(pkg, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
+        except Exception:
+            picks_by_section = {}
+
     # Write each page
     home_page = None
     for pg in pages:
@@ -299,7 +360,7 @@ def generate_project(
             ],
         }
     (app_dir / "page.jsx").write_text(
-        _page_template(home_page, brand_name, tagline, is_home=True),
+        _page_template(home_page, brand_name, tagline, is_home=True, picks_by_section=picks_by_section),
         encoding="utf-8",
     )
 
@@ -837,8 +898,10 @@ def _component_footer() -> str:
     )
 
 
-def _page_template(pg: dict, brand_name: str, tagline: str, is_home: bool) -> str:
+def _page_template(pg: dict, brand_name: str, tagline: str, is_home: bool, picks_by_section: dict | None = None) -> str:
     sections = pg.get("sections") or []
+    picks_by_section = picks_by_section or {}
+    picked_imports: list[tuple[str, str]] = []  # (importName, slug)
     # Always retain the text verbatim in the rendered components (anti-slop)
     rendered_js: list[str] = []
     for i, s in enumerate(sections):
@@ -847,6 +910,21 @@ def _page_template(pg: dict, brand_name: str, tagline: str, is_home: bool) -> st
         subheading = s.get("subheading") or ""
         items = s.get("items") or []
         cta = s.get("cta") or {}
+
+        # If the component library picked an entry for this section, use it
+        pick_slug = picks_by_section.get(i)
+        if pick_slug:
+            imp = _slug_to_component_name(pick_slug)
+            picked_imports.append((imp, pick_slug))
+            rendered_js.append(
+                "      <" + imp
+                + " heading=" + _safe_text(heading or tagline)
+                + " subheading=" + _safe_text(subheading)
+                + " items={" + _json_s(items) + "}"
+                + " cta={" + _json_s(cta) + "} />"
+            )
+            continue
+
         if kind == "hero_video":
             rendered_js.append(
                 "      <ExplodingHero heading={"
@@ -906,6 +984,8 @@ def _page_template(pg: dict, brand_name: str, tagline: str, is_home: bool) -> st
         "import Section from '@/components/Section';\n"
         "import Reveal from '@/components/Reveal';\n"
     )
+    for imp, slug in picked_imports:
+        imports += f"import {imp} from '@/components/generated/{slug}';\n"
     title = pg.get("title") or (brand_name if is_home else "Page")
     meta = (
         "export const metadata = { title: "

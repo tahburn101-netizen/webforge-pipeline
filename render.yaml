@@ -1,0 +1,50 @@
+# Render.com blueprint. One-click deploy:
+#   1. Fork this repo on GitHub
+#   2. New → Blueprint → point to your fork
+#   3. Set GOOGLE_API_KEY + VERCEL_TOKEN in the dashboard
+#
+# Creates: backend web service + MongoDB (via Mongo Atlas URL you supply).
+
+services:
+  - type: web
+    name: webforge-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: backend/Dockerfile
+    plan: starter  # free for trials; upgrade for production
+    healthCheckPath: /api/
+    envVars:
+      - key: MONGO_URL
+        sync: false   # set in dashboard (Atlas free tier)
+      - key: DB_NAME
+        value: webforge_db
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: GOOGLE_API_KEY
+        sync: false   # set in dashboard (free tier from aistudio.google.com)
+      - key: VERCEL_TOKEN
+        sync: false   # set in dashboard (vercel.com/account/tokens)
+      - key: REVIEW_WINDOW_SECONDS
+        value: "120"
+      - key: QA_OVERALL_THRESHOLD
+        value: "75"
+      - key: QA_NO_HUMANS_THRESHOLD
+        value: "95"
+      - key: QA_MOBILE_THRESHOLD
+        value: "75"
+      - key: DISCOVER_ENABLED
+        value: "1"
+      - key: DISCOVER_CACHE_HOURS
+        value: "168"
+      - key: RATE_LIMIT_PER_HOUR
+        value: "12"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "4"
+      - key: WEBFORGE_ARTIFACTS_DIR
+        value: /app/artifacts
+      - key: WEBFORGE_UPLOADS_DIR
+        value: /app/uploads
+    disk:
+      name: webforge-data
+      mountPath: /app
+      sizeGB: 5
