@@ -1,150 +1,129 @@
 # WebForge — AI Website Transformation Pipeline
 
-> Paste any website URL → get back a beautiful, multi-page Next.js site with a video / exploding hero, AI-generated images, QA gates, and a publicly shareable Vercel deployment in ~2 minutes.
+> Paste any website URL → get back a fully-designed multi-page Next.js site, a 2-minute review window to edit the plan, a `$25k`-rubric QA pass (no humans in images, no overlaps, mobile-perfect), and a publicly shareable Vercel deployment.
 
-![status](https://img.shields.io/badge/status-MVP-2DE3C6) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Next.js%20%2B%20MongoDB-0EA5A4) ![deploy](https://img.shields.io/badge/deploys-Vercel-000000)
-
-WebForge ingests a (usually mediocre) source website, reverse-engineers the design system of a beautiful reference site in the same niche via [`skillui`](https://github.com/amaancoderx/npxskillui), regenerates a brand-new multi-page Next.js 14 project with a distinct **template recipe** out of a library of 50, generates hero + section images with **Gemini Nano Banana**, runs vision-based QA on desktop & mobile, then deploys to Vercel with deployment protection automatically disabled so the link is publicly shareable.
-
-## Features
-
-- End-to-end pipeline with live SSE progress (6 stages: Scrape → Analyze → Reference → Generate → QA → Deploy)
-- Vision-driven analysis (Gemini 2.5 Pro reads desktop & mobile screenshots)
-- `skillui` reverse-engineers design tokens from a beautiful reference site in the same niche
-- Curated reference library (19+ premium sites) + 50 distinct template recipes
-- 17 hero archetypes incl. exploding video, full-bleed parallax, framed split, architectural cursor-tilt, portrait mega-type, archway frame, diorama parallax, product float, 3D orb, perspective stack, marquee, kinetic type, …
-- Live image generation with **Gemini Nano Banana** (`gemini-3.1-flash-image-preview`) — hero + section illustrations embedded in `/public/`
-- Multi-page output (Home + Features/Pricing/About/Blog/Docs/Case studies/Contact)
-- 16+ section kinds (feature_grid, stats, testimonials, pricing, FAQ, CTA, gallery, team, timeline, contact_form, blog, docs, case_studies …)
-- Vision QA gates: anti_slop, palette, mobile, overall (0–100)
-- Vercel deploy with **auto-disabled** `ssoProtection` & `passwordProtection` → public URL works without login
-- Hero video upload (4K MP4/WEBM/MOV)
-- Skillui cache (72h TTL in MongoDB)
-- **Provider-agnostic LLM** — works with Emergent's Universal LLM Key OR your own Google/OpenAI/Anthropic keys
-
-## Architecture
+## Pipeline (11 stages)
 
 ```
-React + Vite (shadcn/ui + Framer Motion)  ←→  FastAPI + Playwright + skillui CLI
-                                                      ↓
-                             MongoDB (jobs, logs, skillui_cache)
-                                                      ↓
-        Gemini 2.5 Pro (Emergent or direct) + Nano Banana (image gen)
-                                                      ↓
-                        Vercel REST API (/v13/deployments + /v9/projects)
+1.  SCRAPE        — Playwright: HTML + desktop + mobile screenshots
+2.  ANALYZE       — Gemini vision QA of the original site
+3.  DISCOVER      — scrape awwwards.com + godly.website for similar sites
+                    → Gemini picks the best match for the niche
+4.  REFERENCE     — skillui reverse-engineers the reference's design tokens
+5.  PLAN          — Gemini 2.5 Pro produces multi-page plan (brand, palette,
+                    pages, sections) and the 21st.dev/motionsites-inspired
+                    component library picks drop-in components per section
+6.  REVIEW (2m)   — user has 120s to accept / edit / skip. Auto-continues.
+7.  GENERATE      — Next.js 14 project + Nano Banana images (NO HUMANS prompt)
+                    + drop-in picked components written into components/generated/
+8.  TASTE         — best-effort `npx taste-skill --project <dir>` polish pass
+9.  QA DESKTOP    — $25k rubric (8 metrics incl. no_overlap, no_humans_in_images,
+                    premium_feel) with 3 zoom crops (top/mid/bot) for small-detail checks
+10. QA MOBILE     — dedicated mobile gate on the same rubric
+11. DEPLOY        — Vercel with SSO/password protection auto-disabled for a
+                    publicly shareable URL
 ```
 
-## Quick start
+If desktop overall, mobile overall, or no_humans_in_images scores below thresholds, the pipeline regenerates images + project + redeploys ONCE with reviewer feedback injected.
 
-### 1. Clone & install
+## $25k QA rubric (0-100)
 
-```bash
-git clone https://github.com/<your-username>/webforge.git
-cd webforge
+- `distinct_design` — clear POV, not generic AI-slop
+- `typography_hierarchy` — scale, pairing, rhythm
+- `palette_cohesion` — feels like one brand; accessible contrast
+- `spacing_rhythm` — generous whitespace
+- `no_overlap` — no elements overlap/clip/truncate
+- `no_humans_in_images` — ZERO humans/faces/portraits in any imagery
+- `copy_quality` — concrete, no lorem
+- `premium_feel` — would a $25k agency ship this
+- `overall` — honest gestalt
 
-cd backend
-pip install -r requirements.txt
-playwright install chromium       # required for scraping
-npm install -g skillui            # required for reference design extraction
+Plus structured `overlap_regions` and `human_detections` (normalized bboxes) shown as red/amber overlays in the before/after viewer.
 
-cd ../frontend
-yarn install
-```
+## Stack
 
-### 2. Configure environment
+- **Backend:** FastAPI + Motor (Mongo) + Playwright + google-genai
+- **Frontend:** React 19 + CRA (craco) + Tailwind + shadcn/ui + framer-motion
+- **LLM:** Gemini 2.5 Pro (text+vision) + Gemini Nano Banana (images) via `GOOGLE_API_KEY` (free tier)
+- **Optional:** Emergent Universal LLM Key (skip Google key in that case)
+- **Design extraction:** [`skillui`](https://github.com/amaancoderx/npxskillui) (`npm i -g skillui`)
+- **Polish:** [`taste-skill`](https://github.com/leonxlnx/taste-skill) (`npx taste-skill` — best-effort, optional)
+- **Deploy:** Vercel REST API with auto-disable of `ssoProtection` + `passwordProtection`
 
-Copy `.env.example` → `backend/.env` and fill in:
+## Quick start (free tier)
 
-```bash
-MONGO_URL="mongodb://localhost:27017"
-DB_NAME="webforge_db"
-CORS_ORIGINS="*"
+1. Clone and install:
 
-# REQUIRED for deployment
-VERCEL_TOKEN="vcp_xxxxxxxxxxxxxxxxxxxxxxxx"
+   ```bash
+   git clone <this repo>
+   cd webforge
+   cd backend && pip install -r requirements.txt && playwright install chromium
+   npm install -g skillui
+   cd ../frontend && yarn install
+   ```
 
-# Path A — Emergent Universal LLM Key (one key for everything)
-EMERGENT_LLM_KEY="sk-emergent-xxxxxxxxxxxxxxxx"
+2. Create `backend/.env` (git-ignored):
 
-# Path B — Direct Google key (works WITHOUT Emergent)
-# GOOGLE_API_KEY="AIza..."
-```
+   ```env
+   MONGO_URL="mongodb://localhost:27017"
+   DB_NAME="webforge_db"
+   CORS_ORIGINS="*"
 
-### 3. Run
+   # Free Google AI Studio key — https://aistudio.google.com/apikey
+   GOOGLE_API_KEY="AIza..."
 
-```bash
-# Terminal 1 — MongoDB
-mongod --dbpath ./.data
+   # Vercel Hobby token — https://vercel.com/account/tokens
+   VERCEL_TOKEN="vcp_..."
 
-# Terminal 2 — Backend
-cd backend && uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+   # Tunable defaults
+   REVIEW_WINDOW_SECONDS=120
+   QA_OVERALL_THRESHOLD=75
+   QA_NO_HUMANS_THRESHOLD=95
+   QA_MOBILE_THRESHOLD=75
+   DISCOVER_ENABLED=1
+   DISCOVER_CACHE_HOURS=168
+   ```
 
-# Terminal 3 — Frontend
-cd frontend && yarn start
-```
+3. Run:
 
-Open http://localhost:3000 → paste a URL → watch the live pipeline.
+   ```bash
+   # Terminal 1
+   mongod --dbpath ./.data
 
-## Required credentials
+   # Terminal 2
+   cd backend && uvicorn server:app --port 8001 --reload
 
-| Key | Purpose | Where |
-|---|---|---|
-| `VERCEL_TOKEN` | Programmatic deployments | https://vercel.com/account/tokens |
-| `EMERGENT_LLM_KEY` *(option A)* | Universal Gemini/OpenAI/Claude key | https://app.emergent.sh → Profile → Universal Key |
-| `GOOGLE_API_KEY` *(option B)* | Direct Gemini + Nano Banana | https://aistudio.google.com/apikey |
+   # Terminal 3
+   cd frontend && yarn start
+   ```
 
-> Minimum: `VERCEL_TOKEN` + ONE of the LLM keys.
-
-## Run **without** Emergent
-
-WebForge ships with `backend/llm_provider.py` that auto-switches between providers. When `EMERGENT_LLM_KEY` is missing, it uses `google-genai` SDK with `GOOGLE_API_KEY` for both text (`gemini-2.5-pro`) and image generation (`gemini-3.1-flash-image-preview`).
-
-```bash
-# In backend/.env
-unset EMERGENT_LLM_KEY
-GOOGLE_API_KEY="AIza..."
-VERCEL_TOKEN="vcp_..."
-```
-
-Restart backend. Done.
-
-## Live test (POC)
-
-```bash
-python tests/test_core.py
-```
-
-Validates Playwright + skillui + Gemini 2.5 Pro vision + Vercel deploy in ~90s.
+4. Open http://localhost:3000 → paste any URL → watch 11-stage pipeline → review the plan in the 2-minute window → get a public Vercel URL.
 
 ## REST API
 
-Base: `${REACT_APP_BACKEND_URL}/api`
-
-| Method | Path | Description |
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/jobs` | Create job: `{input_url, reference_url?}` |
-| GET  | `/jobs/{id}` | Job details |
-| GET  | `/jobs/{id}/events` | **SSE** progress stream |
-| POST | `/jobs/{id}/upload-video` | Upload hero video |
-| GET  | `/references` | Curated reference library |
-| GET  | `/templates` | 50 template recipes |
-
-## Template registry
-
-50 recipes mixing 8 layouts × 17 heroes × 6 motion packs × 10 decor kinds × 16 palette moods × 20 typography pairings — picked deterministically by `hash(job_id + niche)`. Every transformation is unique but reproducible.
+| `GET` | `/api/` | health + provider flags |
+| `GET` | `/api/references` | curated reference library |
+| `GET` | `/api/templates` | 50 template recipes |
+| `GET` | `/api/components` | 21st.dev/motionsites-inspired component library |
+| `POST` | `/api/jobs` | start job `{input_url, reference_url?}` |
+| `GET` | `/api/jobs/:id` | job details |
+| `GET` | `/api/jobs/:id/events` | **SSE** live stream |
+| `POST` | `/api/jobs/:id/review` | resolve the 2-min review gate `{action: accept\|edit\|skip, plan?}` |
+| `POST` | `/api/jobs/:id/upload-video` | upload hero video |
 
 ## Security
 
-- Never commit `.env`. Use `.env.example`.
-- Rotate Vercel & GitHub tokens if shared publicly.
-- Generated sites have `ssoProtection` disabled by design (intended for shareable demos).
+- `.env` is git-ignored. Do not commit it.
+- Logs auto-redact `vcp_*`, `AIza*`, and `sk-*` tokens before persistence or SSE fan-out.
+- Deployed sites have Vercel SSO/password protection disabled BY DESIGN so the link is shareable without login.
 
-## Credits
+## Credits & inspiration
 
-- [`skillui`](https://github.com/amaancoderx/npxskillui) — design system reverse-engineering CLI
-- [Emergent](https://emergent.sh) — universal LLM key
-- Hero archetype inspiration: **@neuwebstudio** on TikTok
-- shadcn/ui • Framer Motion • Tailwind • lucide-react • Next.js 14
+- [skillui](https://github.com/amaancoderx/npxskillui) — design-system reverse-engineering CLI
+- [taste-skill](https://github.com/leonxlnx/taste-skill) — polish pass CLI
+- Component recipes in `backend/data/component_library.json` are **inspired by** patterns commonly seen on [21st.dev](https://21st.dev) and [motionsites.ai](https://motionsites.ai) — all JSX in this library is written from scratch, not copied.
 
 ## License
 

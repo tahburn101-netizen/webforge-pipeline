@@ -44,3 +44,8 @@ export function eventsUrl(jobId) {
 export async function deleteJob(id) {
   await api.delete(`/jobs/${id}`);
 }
+
+export async function reviewPlan(jobId, action, plan) {
+  const { data } = await api.post(`/jobs/${jobId}/review`, { action, plan });
+  return data;
+}

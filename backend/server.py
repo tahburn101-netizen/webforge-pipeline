@@ -26,10 +26,11 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from models import Job, JobCreateRequest, JobStep, LogEvent, now_iso  # noqa: E402
+from models import Job, JobCreateRequest, JobStep, LogEvent, PlanReviewRequest, now_iso  # noqa: E402
 from pipeline import ARTIFACTS_ROOT, UPLOADS_ROOT, PipelineRunner  # noqa: E402
 from references import list_all as list_references_all  # noqa: E402
 from templates import TEMPLATES  # noqa: E402
+from component_library import list_all as list_components_all  # noqa: E402
 
 # Mongo
 mongo_url = os.environ["MONGO_URL"]
@@ -39,6 +40,49 @@ db = client[os.environ["DB_NAME"]]
 app = FastAPI(title="WebForge - Website Transformer Pipeline")
 api = APIRouter(prefix="/api")
 runner = PipelineRunner(db)
+
+# --- Simple sliding-window rate limiter ------------------------------------
+# Protects the public deployment from abuse. Env-tunable, in-memory (single-worker).
+# For horizontal scale, swap _RATE_WINDOW for Redis-backed storage.
+RATE_LIMIT_PER_HOUR = int(os.environ.get("RATE_LIMIT_PER_HOUR", "12"))
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "4"))
+RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") != "0"
+
+_RATE_HOUR: dict[str, list[float]] = {}
+_RATE_MIN: dict[str, list[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "anon"
+
+
+def _check_rate(request: Request) -> None:
+    if not RATE_LIMIT_ENABLED:
+        return
+    import time as _t
+    now = _t.time()
+    ip = _client_ip(request)
+    # Hour window
+    h = _RATE_HOUR.setdefault(ip, [])
+    h[:] = [t for t in h if now - t < 3600]
+    if len(h) >= RATE_LIMIT_PER_HOUR:
+        raise HTTPException(
+            429,
+            f"Rate limit: {RATE_LIMIT_PER_HOUR} jobs/hour/IP. Try again later.",
+        )
+    # Minute window
+    m = _RATE_MIN.setdefault(ip, [])
+    m[:] = [t for t in m if now - t < 60]
+    if len(m) >= RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(
+            429,
+            f"Rate limit: {RATE_LIMIT_PER_MINUTE} jobs/minute/IP. Slow down.",
+        )
+    h.append(now)
+    m.append(now)
 
 logger = logging.getLogger("webforge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -61,7 +105,13 @@ async def root():
         "service": "webforge",
         "ok": True,
         "has_vercel_token": bool(os.environ.get("VERCEL_TOKEN")),
-        "has_llm_key": bool(os.environ.get("EMERGENT_LLM_KEY")),
+        "has_llm_key": bool(
+            os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("GOOGLE_API_KEY")
+        ),
+        "llm_provider": (
+            "emergent" if os.environ.get("EMERGENT_LLM_KEY") else
+            ("google" if os.environ.get("GOOGLE_API_KEY") else "none")
+        ),
     }
 
 
@@ -82,6 +132,12 @@ async def status_list():
 @api.get("/references")
 async def get_references():
     return {"references": list_references_all()}
+
+
+@api.get("/components")
+async def get_components():
+    """Expose the curated 21st.dev / motionsites-inspired component library (no raw JSX)."""
+    return {"components": list_components_all()}
 
 
 @api.get("/templates")
@@ -107,7 +163,8 @@ async def get_templates():
 
 
 @api.post("/jobs", response_model=Job)
-async def create_job(req: JobCreateRequest, bg: BackgroundTasks):
+async def create_job(req: JobCreateRequest, bg: BackgroundTasks, request: Request):
+    _check_rate(request)
     url = (req.input_url or "").strip()
     if not url:
         raise HTTPException(400, "input_url required")
@@ -190,6 +247,26 @@ async def job_events(job_id: str, request: Request):
     )
 
 
+@api.post("/jobs/{job_id}/review")
+async def review_plan(job_id: str, req: PlanReviewRequest):
+    doc = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "job not found")
+    if doc.get("status") != "awaiting_review":
+        raise HTTPException(409, f"job not awaiting review (status={doc.get('status')})")
+    action = (req.action or "accept").lower()
+    if action not in ("accept", "edit", "skip"):
+        raise HTTPException(400, "action must be one of: accept, edit, skip")
+    ok = await runner.resolve_review(
+        job_id,
+        action=action,
+        plan=req.plan if action == "edit" else None,
+    )
+    if not ok:
+        raise HTTPException(409, "review gate no longer open (timeout may have elapsed)")
+    return {"ok": True, "action": action}
+
+
 @api.post("/jobs/{job_id}/upload-video")
 async def upload_video(job_id: str, file: UploadFile = File(...)):
     doc = await db.jobs.find_one({"id": job_id}, {"_id": 0})
@@ -226,6 +303,9 @@ async def get_artifact(job_id: str, name: str):
         base / "scrape" / name,
         base / "generated_shots" / name,
         base / "skillui" / name,
+        base / "discovery" / name,
+        base / "generated_images" / name,
+        base / "generated_images_v2" / name,
         base / name,
     ]
     for c in candidates:

@@ -14,18 +14,28 @@ def now_iso() -> str:
 STAGES = [
     "scrape",
     "analyze",
+    "discover",
     "reference",
+    "plan",
+    "review",
     "generate",
-    "qa",
+    "taste",
+    "qa_desktop",
+    "qa_mobile",
     "deploy",
 ]
 
 STAGE_LABELS = {
     "scrape": "Scrape",
-    "analyze": "Analyze",
-    "reference": "Reference Match",
+    "analyze": "Analyze Original",
+    "discover": "Discover References",
+    "reference": "Extract Design Tokens",
+    "plan": "Plan Site",
+    "review": "Review (2 min)",
     "generate": "Generate Next.js",
-    "qa": "QA Gates",
+    "taste": "Taste Polish",
+    "qa_desktop": "QA Desktop ($25k rubric)",
+    "qa_mobile": "QA Mobile",
     "deploy": "Deploy",
 }
 
@@ -44,6 +54,9 @@ class JobStep(BaseModel):
 
 
 class QAScores(BaseModel):
+    """Legacy 4-metric rubric (kept for qa_original back-compat)."""
+    model_config = ConfigDict(extra="ignore")
+
     anti_slop: int = 0
     palette: int = 0
     mobile: int = 0
@@ -56,6 +69,48 @@ class QAScores(BaseModel):
         )
 
 
+class BoundingBox(BaseModel):
+    x: float = 0.0
+    y: float = 0.0
+    w: float = 0.0
+    h: float = 0.0
+    label: str = ""
+
+
+class QAScores25k(BaseModel):
+    """Premium \"$25k agency\" rubric with overlap + human detection."""
+    model_config = ConfigDict(extra="ignore")
+
+    distinct_design: int = 0
+    typography_hierarchy: int = 0
+    palette_cohesion: int = 0
+    spacing_rhythm: int = 0
+    no_overlap: int = 0
+    no_humans_in_images: int = 0
+    copy_quality: int = 0
+    premium_feel: int = 0
+    overall: int = 0
+    notes: str = ""
+    overlap_regions: list[BoundingBox] = Field(default_factory=list)
+    human_detections: list[BoundingBox] = Field(default_factory=list)
+
+    def passed(self, threshold: int = 75, no_humans_threshold: int = 95) -> bool:
+        return (
+            self.overall >= threshold
+            and self.no_overlap >= threshold
+            and self.no_humans_in_images >= no_humans_threshold
+        )
+
+
+class DiscoveryCandidate(BaseModel):
+    url: str
+    name: str = ""
+    source: str = ""  # 'awwwards' | 'godly' | 'curated'
+    thumb: Optional[str] = None  # local artifact filename
+    score: float = 0.0
+    reason: str = ""
+
+
 class Job(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -63,10 +118,12 @@ class Job(BaseModel):
     input_url: str
     reference_url: Optional[str] = None
     niche: Optional[str] = None
-    status: str = "queued"  # queued | running | qa_passed | deploying | deployed | failed
+    status: str = "queued"
+    # queued | running | awaiting_review | running | qa_passed | deploying | deployed | failed
     steps: list[JobStep] = Field(default_factory=JobStep.default_steps)
     qa_original: QAScores = Field(default_factory=QAScores)
-    qa_generated: QAScores = Field(default_factory=QAScores)
+    qa_generated: QAScores25k = Field(default_factory=QAScores25k)
+    qa_mobile: QAScores25k = Field(default_factory=QAScores25k)
     deploy_url: Optional[str] = None
     deployment_id: Optional[str] = None
     project_id: Optional[str] = None
@@ -75,8 +132,15 @@ class Job(BaseModel):
     error: Optional[str] = None
     pages_plan: list[dict] = Field(default_factory=list)
     design_tokens: dict = Field(default_factory=dict)
+    brand: dict = Field(default_factory=dict)
+    nav_plan: list[dict] = Field(default_factory=list)
+    discovery_candidates: list[DiscoveryCandidate] = Field(default_factory=list)
+    discovery_pick: Optional[DiscoveryCandidate] = None
+    picked_components: list[dict] = Field(default_factory=list)
+    review_deadline: Optional[str] = None
+    review_action: Optional[str] = None  # accept | edit | auto
     artifacts_dir: Optional[str] = None
-    screenshots: dict = Field(default_factory=dict)  # original/generated desktop/mobile URLs
+    screenshots: dict = Field(default_factory=dict)
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -84,6 +148,11 @@ class Job(BaseModel):
 class JobCreateRequest(BaseModel):
     input_url: str
     reference_url: Optional[str] = None
+
+
+class PlanReviewRequest(BaseModel):
+    action: str  # "accept" | "edit" | "skip"
+    plan: Optional[dict] = None
 
 
 class LogEvent(BaseModel):

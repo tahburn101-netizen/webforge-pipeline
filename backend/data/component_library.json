@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "note": "Curated component recipes inspired by the patterns seen on 21st.dev and motionsites.ai. Components are written from scratch here (not copied). The generator picks the best-matching entry per section by tag overlap.",
+  "components": [
+    {
+      "slug": "aurora-hero",
+      "kind": "hero_text",
+      "source": "inspired_by:21st.dev",
+      "tags": ["hero", "dark", "gradient", "aurora", "minimal"],
+      "deps": ["framer-motion"],
+      "jsx": "'use client';\nimport { motion } from 'framer-motion';\nexport default function AuroraHero({ heading, subheading, cta }) {\n  return (\n    <section className='relative overflow-hidden py-32 px-6'>\n      <div className='absolute inset-0 pointer-events-none'>\n        <div className='absolute -top-40 left-1/2 -translate-x-1/2 h-[600px] w-[1200px] rounded-full blur-3xl opacity-30' style={{ background: 'conic-gradient(from 180deg at 50% 50%, var(--primary), var(--accent), var(--primary-2), var(--primary))' }} />\n      </div>\n      <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.8, ease:[0.22,1,0.36,1]}} className='relative max-w-4xl mx-auto text-center'>\n        <h1 className='text-5xl md:text-7xl font-semibold tracking-tight'>{heading}</h1>\n        <p className='mt-6 text-lg text-[color:var(--muted)] max-w-2xl mx-auto'>{subheading}</p>\n        {cta?.label && (<a href={cta.href || '#'} className='mt-10 inline-flex items-center gap-2 px-6 h-12 rounded-xl bg-[color:var(--primary)] text-[color:var(--bg)] font-medium hover:opacity-90 transition'>{cta.label} \u2192</a>)}\n      </motion.div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "orbit-hero",
+      "kind": "hero_text",
+      "source": "inspired_by:motionsites",
+      "tags": ["hero", "3d", "orbit", "dark", "cinematic"],
+      "deps": ["framer-motion"],
+      "jsx": "'use client';\nimport { motion } from 'framer-motion';\nexport default function OrbitHero({ heading, subheading, cta }) {\n  return (\n    <section className='relative min-h-[80vh] grid place-items-center overflow-hidden'>\n      <motion.div className='absolute size-[540px] rounded-full border border-white/10' animate={{rotate:360}} transition={{repeat:Infinity,duration:40,ease:'linear'}}>\n        <div className='absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 size-3 rounded-full bg-[color:var(--primary)] shadow-[0_0_20px_rgba(255,255,255,0.4)]' />\n      </motion.div>\n      <motion.div className='absolute size-[340px] rounded-full border border-white/10' animate={{rotate:-360}} transition={{repeat:Infinity,duration:28,ease:'linear'}}>\n        <div className='absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-[color:var(--accent)]' />\n      </motion.div>\n      <div className='relative text-center max-w-3xl px-6'>\n        <h1 className='text-5xl md:text-7xl font-semibold tracking-tighter'>{heading}</h1>\n        <p className='mt-5 text-[color:var(--muted)]'>{subheading}</p>\n        {cta?.label && (<a href={cta.href || '#'} className='mt-8 inline-block px-5 h-11 leading-[44px] rounded-full border border-white/15 hover:border-white/40 transition'>{cta.label}</a>)}\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "bento-features",
+      "kind": "feature_grid",
+      "source": "inspired_by:21st.dev",
+      "tags": ["features", "bento", "grid", "cards"],
+      "deps": ["framer-motion"],
+      "jsx": "'use client';\nimport { motion } from 'framer-motion';\nexport default function BentoFeatures({ heading, subheading, items = [] }) {\n  const cells = items.slice(0, 6);\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-6xl mx-auto'>\n        <div className='mb-10'>\n          <h2 className='text-3xl md:text-5xl font-semibold tracking-tight'>{heading}</h2>\n          {subheading && <p className='mt-3 text-[color:var(--muted)] max-w-2xl'>{subheading}</p>}\n        </div>\n        <div className='grid grid-cols-1 md:grid-cols-6 gap-3 auto-rows-[180px]'>\n          {cells.map((it, i) => (\n            <motion.div key={i} initial={{opacity:0,y:10}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:i*0.06}}\n              className={['rounded-2xl border border-white/10 bg-white/[0.03] p-5 flex flex-col justify-between', i===0?'md:col-span-4 md:row-span-2':'md:col-span-2'].join(' ')}>\n              <div className='text-[10px] uppercase tracking-[0.18em] text-[color:var(--primary)]'>{String(i+1).padStart(2,'0')}</div>\n              <div>\n                <div className='text-lg font-semibold tracking-tight'>{it.title}</div>\n                <div className='text-sm text-[color:var(--muted)] mt-1 leading-relaxed'>{it.body}</div>\n              </div>\n            </motion.div>\n          ))}\n        </div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "magnetic-cta",
+      "kind": "cta",
+      "source": "inspired_by:motionsites",
+      "tags": ["cta", "magnetic", "interaction", "minimal"],
+      "deps": ["framer-motion"],
+      "jsx": "'use client';\nimport { motion, useMotionValue, useSpring } from 'framer-motion';\nimport { useRef } from 'react';\nexport default function MagneticCTA({ heading, subheading, cta }) {\n  const ref = useRef(null);\n  const x = useMotionValue(0);\n  const y = useMotionValue(0);\n  const sx = useSpring(x, { stiffness: 150, damping: 15 });\n  const sy = useSpring(y, { stiffness: 150, damping: 15 });\n  return (\n    <section className='px-6 py-24 text-center'>\n      <h2 className='text-4xl md:text-6xl font-semibold tracking-tighter max-w-3xl mx-auto'>{heading}</h2>\n      {subheading && <p className='mt-4 text-[color:var(--muted)]'>{subheading}</p>}\n      <motion.a ref={ref} href={cta?.href || '#'} style={{x:sx,y:sy}}\n        onMouseMove={(e)=>{const r=ref.current.getBoundingClientRect();x.set((e.clientX-r.left-r.width/2)*0.4);y.set((e.clientY-r.top-r.height/2)*0.4);}}\n        onMouseLeave={()=>{x.set(0);y.set(0);}}\n        className='mt-10 inline-flex items-center gap-2 px-8 h-14 rounded-full bg-[color:var(--primary)] text-[color:var(--bg)] font-medium'>\n        {cta?.label || 'Get started'} \u2192\n      </motion.a>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "stats-strip",
+      "kind": "stats",
+      "source": "inspired_by:21st.dev",
+      "tags": ["stats", "numbers", "editorial", "strip"],
+      "deps": ["framer-motion"],
+      "jsx": "'use client';\nimport { motion } from 'framer-motion';\nexport default function StatsStrip({ heading, items = [] }) {\n  return (\n    <section className='px-6 py-20 border-y border-white/5'>\n      <div className='max-w-6xl mx-auto'>\n        {heading && <h2 className='text-2xl md:text-3xl font-semibold tracking-tight mb-10'>{heading}</h2>}\n        <div className='grid grid-cols-2 md:grid-cols-4 gap-6'>\n          {items.slice(0,4).map((s,i)=> (\n            <motion.div key={i} initial={{opacity:0,y:10}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:i*0.08}}>\n              <div className='text-4xl md:text-6xl font-semibold tracking-tighter tabular-nums' style={{color:'var(--primary)'}}>{s.meta || s.title}</div>\n              <div className='mt-2 text-sm text-[color:var(--muted)]'>{s.body || s.title}</div>\n            </motion.div>\n          ))}\n        </div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "marquee-logos",
+      "kind": "logo_cloud",
+      "source": "inspired_by:motionsites",
+      "tags": ["marquee", "logos", "logo_cloud", "motion"],
+      "deps": [],
+      "jsx": "export default function MarqueeLogos({ heading, items = [] }) {\n  const row = [...items, ...items];\n  return (\n    <section className='py-16 border-y border-white/5 overflow-hidden'>\n      {heading && <div className='text-center text-[11px] uppercase tracking-[0.2em] text-[color:var(--muted)] mb-6'>{heading}</div>}\n      <div className='flex gap-12 animate-marquee whitespace-nowrap'>\n        {row.map((it,i)=>(<div key={i} className='text-2xl font-semibold text-white/40 hover:text-white/80 transition shrink-0'>{it.title}</div>))}\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "pricing-cards",
+      "kind": "pricing",
+      "source": "inspired_by:21st.dev",
+      "tags": ["pricing", "cards", "tiers", "plans"],
+      "deps": [],
+      "jsx": "export default function PricingCards({ heading, subheading, items = [] }) {\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-5xl mx-auto text-center'>\n        <h2 className='text-3xl md:text-5xl font-semibold tracking-tight'>{heading}</h2>\n        {subheading && <p className='mt-3 text-[color:var(--muted)]'>{subheading}</p>}\n      </div>\n      <div className='mt-12 max-w-5xl mx-auto grid md:grid-cols-3 gap-4'>\n        {items.slice(0,3).map((p,i)=>(\n          <div key={i} className={['rounded-2xl border p-6 flex flex-col', i===1 ? 'border-[color:var(--primary)] bg-white/[0.04]' : 'border-white/10 bg-white/[0.02]'].join(' ')}>\n            <div className='text-[11px] uppercase tracking-[0.18em] text-[color:var(--muted)]'>{p.title}</div>\n            <div className='mt-3 text-4xl font-semibold tracking-tighter' style={{color: i===1 ? 'var(--primary)' : 'var(--fg)'}}>{p.meta || 'Contact'}</div>\n            <div className='mt-2 text-sm text-[color:var(--muted)] flex-1'>{p.body}</div>\n            <a href='#' className={['mt-6 h-11 grid place-items-center rounded-xl font-medium', i===1 ? 'bg-[color:var(--primary)] text-[color:var(--bg)]' : 'border border-white/15 hover:bg-white/5'].join(' ')}>Choose</a>\n          </div>\n        ))}\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "faq-accordion",
+      "kind": "faq",
+      "source": "inspired_by:21st.dev",
+      "tags": ["faq", "accordion", "minimal"],
+      "deps": [],
+      "jsx": "'use client';\nimport { useState } from 'react';\nexport default function FAQAccordion({ heading, items = [] }) {\n  const [open, setOpen] = useState(-1);\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-3xl mx-auto'>\n        <h2 className='text-3xl md:text-4xl font-semibold tracking-tight mb-8'>{heading}</h2>\n        <div className='divide-y divide-white/5 border-y border-white/5'>\n          {items.map((q,i)=>(\n            <div key={i}>\n              <button onClick={()=>setOpen(open===i?-1:i)} className='w-full text-left py-5 flex items-center justify-between gap-4 hover:text-[color:var(--primary)] transition'>\n                <span className='font-medium'>{q.title}</span>\n                <span className='text-xl'>{open===i?'\u2013':'+'}</span>\n              </button>\n              {open===i && <div className='pb-5 text-[color:var(--muted)]'>{q.body}</div>}\n            </div>\n          ))}\n        </div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "testimonial-quote",
+      "kind": "testimonials",
+      "source": "inspired_by:motionsites",
+      "tags": ["testimonial", "quote", "editorial"],
+      "deps": [],
+      "jsx": "export default function TestimonialQuote({ heading, items = [] }) {\n  const t = items[0] || {};\n  return (\n    <section className='px-6 py-28'>\n      <div className='max-w-4xl mx-auto'>\n        {heading && <div className='text-[11px] uppercase tracking-[0.2em] text-[color:var(--primary)] mb-6'>{heading}</div>}\n        <blockquote className='text-3xl md:text-5xl font-display leading-[1.1] tracking-tight'>\u201c{t.body}\u201d</blockquote>\n        <div className='mt-8 text-sm text-[color:var(--muted)]'>\u2014 {t.title}{t.meta?`, ${t.meta}`:''}</div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "split-content",
+      "kind": "content_split",
+      "source": "inspired_by:21st.dev",
+      "tags": ["split", "two-column", "editorial", "content"],
+      "deps": [],
+      "jsx": "export default function SplitContent({ heading, subheading, items = [], cta }) {\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center'>\n        <div>\n          <h2 className='text-3xl md:text-5xl font-semibold tracking-tight'>{heading}</h2>\n          {subheading && <p className='mt-4 text-[color:var(--muted)] leading-relaxed'>{subheading}</p>}\n          {cta?.label && <a href={cta.href||'#'} className='mt-6 inline-flex h-11 px-5 items-center rounded-xl border border-white/15 hover:bg-white/5'>{cta.label}</a>}\n        </div>\n        <div className='rounded-2xl aspect-[4/3] bg-gradient-to-br from-[color:var(--primary)]/20 via-white/5 to-[color:var(--accent)]/20 border border-white/10 grid place-items-center'>\n          <div className='grid gap-3 p-8'>\n            {items.slice(0,3).map((it,i)=>(\n              <div key={i} className='rounded-xl border border-white/10 bg-black/20 p-3'>\n                <div className='text-sm font-medium'>{it.title}</div>\n                <div className='text-xs text-[color:var(--muted)] mt-1'>{it.body}</div>\n              </div>\n            ))}\n          </div>\n        </div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "gallery-masonry",
+      "kind": "gallery",
+      "source": "inspired_by:motionsites",
+      "tags": ["gallery", "masonry", "images"],
+      "deps": [],
+      "jsx": "export default function GalleryMasonry({ heading, items = [] }) {\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-6xl mx-auto'>\n        {heading && <h2 className='text-3xl md:text-4xl font-semibold tracking-tight mb-8'>{heading}</h2>}\n        <div className='columns-1 md:columns-3 gap-3 [&>*]:mb-3'>\n          {items.slice(0,9).map((it,i)=>(\n            <div key={i} className={['break-inside-avoid rounded-xl border border-white/10 overflow-hidden', i%3===0?'aspect-[4/5]':i%3===1?'aspect-square':'aspect-[4/3]'].join(' ')}\n              style={{background:`linear-gradient(135deg, var(--primary)20, var(--accent)10)`}}>\n              <div className='p-4 h-full flex flex-col justify-end text-xs text-white/70'>{it.title}</div>\n            </div>\n          ))}\n        </div>\n      </div>\n    </section>\n  );\n}"
+    },
+    {
+      "slug": "contact-minimal",
+      "kind": "contact_form",
+      "source": "inspired_by:21st.dev",
+      "tags": ["contact", "form", "minimal"],
+      "deps": [],
+      "jsx": "export default function ContactMinimal({ heading, subheading }) {\n  return (\n    <section className='px-6 py-24'>\n      <div className='max-w-xl mx-auto'>\n        <h2 className='text-3xl md:text-4xl font-semibold tracking-tight'>{heading}</h2>\n        {subheading && <p className='mt-3 text-[color:var(--muted)]'>{subheading}</p>}\n        <form className='mt-8 space-y-3'>\n          <input placeholder='Name' className='w-full h-11 px-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-[color:var(--primary)]' />\n          <input placeholder='Email' type='email' className='w-full h-11 px-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-[color:var(--primary)]' />\n          <textarea placeholder='Message' rows={4} className='w-full p-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-[color:var(--primary)]' />\n          <button className='h-11 px-5 rounded-xl bg-[color:var(--primary)] text-[color:var(--bg)] font-medium'>Send</button>\n        </form>\n      </div>\n    </section>\n  );\n}"
+    }
+  ]
+}

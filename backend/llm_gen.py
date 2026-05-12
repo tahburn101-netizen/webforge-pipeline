@@ -193,6 +193,193 @@ async def qa_review(
     return data
 
 
+# --- $25k rubric (distinct_design, typography_hierarchy, palette_cohesion,
+#     spacing_rhythm, no_overlap, no_humans_in_images, copy_quality, premium_feel)
+
+QA_25K_SYSTEM = """You are a senior design director at a top-tier agency
+reviewing a website that claims to be worth $25,000 USD. Score strictly 0-100.
+
+Metrics (all 0-100):
+- distinct_design: has a clear, non-generic design POV. AI-slop <= 50.
+- typography_hierarchy: scale, weight contrast, rhythm, pairing quality.
+- palette_cohesion: feels like ONE brand; accessible contrast; no random color dumps.
+- spacing_rhythm: generous whitespace, consistent vertical rhythm, no cramped sections.
+- no_overlap: 100 = NO elements overlap, clip, or truncate. Penalize ANY visible overlap.
+- no_humans_in_images: 100 = ZERO humans/people/faces/portraits in ANY image on the page. This is HARD CRITERIA.
+- copy_quality: concrete, specific, no lorem, no AI-slop phrasing.
+- premium_feel: would a $25k agency ship this as-is? Consider craft, restraint, polish.
+- overall: honest gestalt.
+
+You will also receive 1-3 zoom crops of the page (hero, mid, footer) to catch small overlap/clipping issues.
+Also return arrays:
+- overlap_regions: up to 6 boxes {x,y,w,h,label} where x,y,w,h are fractions 0-1 of the screenshot size
+- human_detections: up to 6 boxes {x,y,w,h,label} for any detected human/face
+
+Return STRICT JSON (no markdown fences):
+{
+  "distinct_design": int, "typography_hierarchy": int, "palette_cohesion": int,
+  "spacing_rhythm": int, "no_overlap": int, "no_humans_in_images": int,
+  "copy_quality": int, "premium_feel": int, "overall": int,
+  "notes": string (3-6 concrete actionable lines),
+  "overlap_regions": [{"x":number,"y":number,"w":number,"h":number,"label":string}],
+  "human_detections": [{"x":number,"y":number,"w":number,"h":number,"label":string}]
+}"""
+
+
+async def qa_review_25k(
+    screenshot_png: str,
+    mode: str = "desktop",
+    context: str = "",
+) -> dict[str, Any]:
+    """Run the premium $25k rubric against a single screenshot.
+
+    Automatically creates 3 zoom crops (top/mid/bottom) and includes them
+    in the vision call so small overlap or clipping issues are catchable.
+    """
+    p = Path(screenshot_png) if screenshot_png else None
+    if not p or not p.exists():
+        return _qa25k_unavailable("missing screenshot")
+
+    crops = _build_zoom_crops(p)
+    imgs = [str(p)] + crops
+
+    device_note = (
+        "This is a MOBILE view (390px). Be extra strict on tap targets, "
+        "font readability at small sizes, and horizontal scroll."
+        if mode == "mobile"
+        else "This is a DESKTOP view (1440px)."
+    )
+    prompt = (
+        f"{device_note}\n"
+        + (f"Context: {context}\n" if context else "")
+        + "First image: the full screenshot. Subsequent images: zoom crops (top, mid, bottom). "
+        "Use the crops to catch small overlap / clipping / humans in imagery. "
+        "Return STRICT JSON only."
+    )
+
+    last_error = ""
+    text = ""
+    for attempt in range(2):
+        try:
+            text = await generate_text(QA_25K_SYSTEM, prompt, images=imgs)
+            break
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {str(e)[:200]}"
+            if attempt == 0:
+                import asyncio as _a
+                await _a.sleep(2)
+                continue
+            return _qa25k_unavailable(last_error)
+
+    try:
+        data = _parse_json_lenient(text)
+    except Exception:
+        try:
+            data = await _json_repair_25k(text)
+        except Exception:
+            return _qa25k_unavailable(
+                "unparseable: " + (text or "")[:300]
+            )
+
+    # Normalize ints, clamp, preserve arrays
+    int_fields = (
+        "distinct_design",
+        "typography_hierarchy",
+        "palette_cohesion",
+        "spacing_rhythm",
+        "no_overlap",
+        "no_humans_in_images",
+        "copy_quality",
+        "premium_feel",
+        "overall",
+    )
+    out: dict[str, Any] = {}
+    for k in int_fields:
+        try:
+            v = int(data.get(k, 0))
+        except Exception:
+            v = 0
+        out[k] = max(0, min(100, v))
+    out["notes"] = (data.get("notes") or "").strip()[:1200]
+    # Preserve arrays; pipeline._sanitize_qa will coerce further
+    out["overlap_regions"] = data.get("overlap_regions") or []
+    out["human_detections"] = data.get("human_detections") or []
+    return out
+
+
+def _qa25k_unavailable(reason: str) -> dict[str, Any]:
+    """Return a QAScores25k-shaped dict with -1 sentinel on failure."""
+    out = {
+        k: -1
+        for k in (
+            "distinct_design",
+            "typography_hierarchy",
+            "palette_cohesion",
+            "spacing_rhythm",
+            "no_overlap",
+            "no_humans_in_images",
+            "copy_quality",
+            "premium_feel",
+            "overall",
+        )
+    }
+    out["notes"] = f"QA unavailable: {reason[:400]}"
+    out["overlap_regions"] = []
+    out["human_detections"] = []
+    return out
+
+
+def _build_zoom_crops(src_png: Path) -> list[str]:
+    """Generate 3 zoom crops (top/mid/bottom) next to the source image.
+
+    Returns absolute paths. Silently returns [] on Pillow errors.
+    """
+    try:
+        from PIL import Image  # type: ignore
+
+        img = Image.open(src_png)
+        w, h = img.size
+        out: list[str] = []
+        stem = src_png.stem
+        parent = src_png.parent
+        # Portions of the page to zoom into
+        spans = [
+            ("top", (0, 0, w, min(h, int(h * 0.45)))),
+            ("mid", (0, int(h * 0.3), w, int(h * 0.7))),
+            ("bot", (0, max(0, int(h * 0.55)), w, h)),
+        ]
+        for name, box in spans:
+            x0, y0, x1, y1 = box
+            if x1 <= x0 or y1 <= y0:
+                continue
+            crop = img.crop(box)
+            # Cap height for the vision API (keep file sizes reasonable)
+            if crop.height > 1400:
+                new_h = 1400
+                new_w = int(crop.width * (new_h / crop.height))
+                crop = crop.resize((new_w, new_h))
+            out_path = parent / f"{stem}_zoom_{name}.png"
+            crop.save(out_path, format="PNG", optimize=True)
+            out.append(str(out_path))
+        return out
+    except Exception:
+        return []
+
+
+async def _json_repair_25k(text: str) -> dict[str, Any]:
+    sys = (
+        "Convert the user's free-form review into STRICT JSON with the schema: "
+        '{"distinct_design":int,"typography_hierarchy":int,"palette_cohesion":int,'
+        '"spacing_rhythm":int,"no_overlap":int,"no_humans_in_images":int,'
+        '"copy_quality":int,"premium_feel":int,"overall":int,'
+        '"notes":string,"overlap_regions":[{"x":number,"y":number,"w":number,"h":number,"label":string}],'
+        '"human_detections":[{"x":number,"y":number,"w":number,"h":number,"label":string}]}.'
+        ' Use 0-100 ranges. Output ONLY the JSON.'
+    )
+    out = await generate_text(sys, text or "{}")
+    return _parse_json_lenient(out)
+
+
 async def _json_repair(text: str) -> dict[str, Any]:
     """Use a tiny LLM call to coerce QA text into valid JSON."""
     sys = (
